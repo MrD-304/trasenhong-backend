@@ -47,8 +47,8 @@ exports.getMe = async (req, res, next) => {
 
 exports.updateMe = async (req, res, next) => {
   try {
-    const { full_name, phone } = req.body;
-    await User.update(req.user.id, { full_name, phone });
+    const { full_name, phone, address, ward, district, province } = req.body;
+    await User.update(req.user.id, { full_name, phone, address, ward, district, province });
     const user = await User.findById(req.user.id);
     res.json({ success: true, message: "Cập nhật thành công.", user });
   } catch (err) { next(err); }
