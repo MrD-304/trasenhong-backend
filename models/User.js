@@ -1,14 +1,23 @@
 const db = require("../config/db");
 
 class User {
+
   static async findByEmail(email) {
     const [rows] = await db.query("SELECT * FROM users WHERE email = ? LIMIT 1", [email]);
     return rows[0] || null;
   }
 
+  static async findByPhone(phone) {
+    const [rows] = await db.query("SELECT * FROM users WHERE phone = ? LIMIT 1", [phone]);
+    return rows[0] || null;
+  }
+
   static async findById(id) {
     const [rows] = await db.query(
-      "SELECT id, full_name, email, phone, role, is_active, created_at FROM users WHERE id = ? LIMIT 1",
+      `SELECT id, full_name, email, phone,
+              address, ward, district, province,
+              role, is_active, created_at, updated_at
+       FROM users WHERE id = ? LIMIT 1`,
       [id]
     );
     return rows[0] || null;
@@ -23,10 +32,10 @@ class User {
   }
 
   static async update(id, fields) {
-    const keys   = Object.keys(fields);
-    const values = Object.values(fields);
+    const keys = Object.keys(fields);
     if (!keys.length) return;
-    const set = keys.map(k => `${k} = ?`).join(", ");
+    const values = Object.values(fields);
+    const set = keys.map(k => `\`${k}\` = ?`).join(", ");
     await db.query(`UPDATE users SET ${set} WHERE id = ?`, [...values, id]);
   }
 
@@ -35,7 +44,6 @@ class User {
     let where = "WHERE 1=1";
     const params = [];
     if (role) { where += " AND role = ?"; params.push(role); }
-
     const [[{ total }]] = await db.query(`SELECT COUNT(*) AS total FROM users ${where}`, params);
     const [rows] = await db.query(
       `SELECT id, full_name, email, phone, role, is_active, created_at
