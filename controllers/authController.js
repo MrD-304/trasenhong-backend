@@ -38,18 +38,15 @@ exports.register = async (req, res, next) => {
 // ── ĐĂNG NHẬP (email HOẶC số điện thoại) ─────────────────
 exports.login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body; // field "email" dùng chung cho cả email lẫn SĐT
 
     if (!email || !password) {
       return res.status(400).json({ success: false, message: "Vui lòng nhập thông tin đăng nhập." });
     }
 
-    // Thử tìm theo email trước, nếu không có thì tìm theo phone
+    // Tìm theo email trước, nếu không có thì tìm theo SĐT
     let user = await User.findByEmail(email);
-
-    if (!user) {
-      user = await User.findByPhone(email); // dùng lại biến email để nhận phone
-    }
+    if (!user) user = await User.findByPhone(email);
 
     if (!user) {
       return res.status(401).json({ success: false, message: "Thông tin đăng nhập không đúng." });
@@ -83,17 +80,17 @@ exports.getMe = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// ── CẬP NHẬT THÔNG TIN (họ tên, phone, địa chỉ) ─────────
+// ── CẬP NHẬT THÔNG TIN ───────────────────────────────────
 exports.updateMe = async (req, res, next) => {
   try {
     const { full_name, phone, address, ward, district, province } = req.body;
 
-    // Lấy user hiện tại để giữ lại full_name nếu không gửi lên
     const current = await User.findById(req.user.id);
     if (!current) return res.status(404).json({ success: false, message: "Không tìm thấy tài khoản." });
 
+    // Giữ nguyên giá trị cũ nếu không gửi lên
     const updateData = {
-      full_name: full_name || current.full_name, // giữ nguyên nếu không gửi
+      full_name: full_name !== undefined ? full_name : current.full_name,
       phone:     phone     !== undefined ? phone     : current.phone,
       address:   address   !== undefined ? address   : current.address,
       ward:      ward      !== undefined ? ward      : current.ward,
@@ -110,7 +107,6 @@ exports.updateMe = async (req, res, next) => {
 // ── ĐỔI MẬT KHẨU ─────────────────────────────────────────
 exports.changePassword = async (req, res, next) => {
   try {
-    // Chấp nhận cả "current_password" và "old_password"
     const currentPw = req.body.current_password || req.body.old_password;
     const newPw     = req.body.new_password;
 
@@ -121,8 +117,9 @@ exports.changePassword = async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Mật khẩu mới phải có ít nhất 8 ký tự." });
     }
 
-    const user = await User.findById(req.user.id);
-    const match = await bcrypt.compare(currentPw, user.password);
+    // Dùng findByEmail để lấy cả password hash
+    const fullUser = await User.findByEmail(req.user.email);
+    const match = await bcrypt.compare(currentPw, fullUser.password);
     if (!match) {
       return res.status(400).json({ success: false, message: "Mật khẩu hiện tại không đúng." });
     }
