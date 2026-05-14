@@ -1,7 +1,7 @@
 const Order   = require("../models/Order");
 const Product = require("../models/Product");
 const db      = require("../config/db");
-const { sendOrderConfirmation } = require("../services/emailService");
+const { sendAdminNewOrder } = require("../services/emailService");
 
 // ── TẠO ĐƠN HÀNG ─────────────────────────────────────────
 // Giai đoạn 1: Chỉ lưu DB với status = "pending"
@@ -84,9 +84,9 @@ exports.create = async (req, res, next) => {
 
     const order = await Order.findById(orderId);
 
-    // Gửi email xác nhận cho khách (nội dung: đã nhận đơn, chờ cửa hàng xác nhận)
-    sendOrderConfirmation(order).catch(e =>
-      console.error("[email] sendOrderConfirmation:", e.message)
+    // Gửi email thông báo admin có đơn mới cần xác nhận
+    sendAdminNewOrder(order).catch(e =>
+      console.error("[email] sendAdminNewOrder:", e.message)
     );
 
     res.status(201).json({
