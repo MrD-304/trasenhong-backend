@@ -13,7 +13,6 @@ function emailjsPost(templateId, templateParams) {
   });
 }
 
-// Email đơn hàng đã chuyển sang frontend (checkout.js)
 async function sendAdminNewOrder() {}
 
 async function sendContactEmail({ name, phone, email, subject, message }) {
