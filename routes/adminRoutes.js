@@ -8,6 +8,7 @@ router.use(auth, admin);
 router.get("/dashboard",              ctrl.getDashboard);
 router.get("/orders",                 ctrl.listOrders);
 router.get("/orders/:id",             ctrl.getOrder);
+router.put("/orders/:id/confirm",     ctrl.confirmOrder);
 router.put("/orders/:id/status",      ctrl.updateOrderStatus);
 router.get("/products",               ctrl.listProducts);
 router.get("/users",                  ctrl.listUsers);
