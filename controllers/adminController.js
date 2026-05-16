@@ -18,10 +18,10 @@ exports.getDashboard = async (req, res, next) => {
       success: true,
       dashboard: {
         ...stats,
-        total_products:   products.total,
-        total_customers:  users.total,
+        total_products:     products.total,
+        total_customers:    users.total,
         low_stock_products: lowStock,
-        recent_orders:    recentOrders,
+        recent_orders:      recentOrders,
       },
     });
   } catch (err) { next(err); }
@@ -55,6 +55,67 @@ exports.updateOrderStatus = async (req, res, next) => {
     await Order.updateStatus(order.id, status);
     res.json({ success: true, message: `Đã cập nhật trạng thái thành "${status}".` });
   } catch (err) { next(err); }
+};
+
+// ── XÁC NHẬN ĐƠN → TẠO VẬN ĐƠN GHN THẬT ────────────────
+exports.confirmOrder = async (req, res, next) => {
+  try {
+    const order = await Order.findById(Number(req.params.id));
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng." });
+    }
+    if (order.status !== "pending") {
+      return res.status(400).json({
+        success: false,
+        message: `Đơn đang ở trạng thái "${order.status}", không thể xác nhận lại.`,
+      });
+    }
+    if (!order.ward_code || !order.district_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Đơn thiếu ward_code hoặc district_id, không thể tạo vận đơn GHN.",
+      });
+    }
+
+    const ghnService = require("../services/ghnService");
+
+    // Tạo vận đơn GHN thật
+    const ghnResult = await ghnService.createOrder({
+      orderId:        order.id,
+      orderCode:      order.order_code,
+      full_name:      order.full_name,
+      phone:          order.phone,
+      address:        order.address,
+      ward_code:      order.ward_code,
+      district_id:    order.district_id,
+      items:          order.items,
+      total:          order.total,
+      shipping_fee:   order.shipping_fee,
+      note:           order.note,
+      payment_method: order.payment_method,
+    });
+
+    // Lưu mã GHN vào DB + cập nhật status → confirmed
+    await Order.updateGHN(order.id, {
+      ghn_order_code:        ghnResult.order_code,
+      ghn_expected_delivery: ghnResult.expected_delivery_time || null,
+    });
+    await Order.updateStatus(order.id, "confirmed");
+
+    res.json({
+      success:               true,
+      message:               "Đã xác nhận và tạo vận đơn GHN thành công!",
+      ghn_order_code:        ghnResult.order_code,
+      ghn_expected_delivery: ghnResult.expected_delivery_time,
+      total_fee:             ghnResult.total_fee,
+    });
+  } catch (err) {
+    console.error("[confirmOrder] GHN error:", err.response?.data || err.message);
+    res.status(500).json({
+      success: false,
+      message: "Tạo vận đơn GHN thất bại: " + (err.response?.data?.message || err.message),
+    });
+  }
 };
 
 exports.listProducts = async (req, res, next) => {
