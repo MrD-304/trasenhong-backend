@@ -4,8 +4,6 @@ const db      = require("../config/db");
 const { sendAdminNewOrder } = require("../services/emailService");
 
 // ── TẠO ĐƠN HÀNG ─────────────────────────────────────────
-// Giai đoạn 1: Chỉ lưu DB với status = "pending"
-// KHÔNG tạo vận đơn GHN tự động — chờ admin xác nhận
 exports.create = async (req, res, next) => {
   try {
     const {
@@ -66,14 +64,15 @@ exports.create = async (req, res, next) => {
       }
     }
 
-    // Phí ship tạm thời (GHN sẽ tính chính xác khi admin xác nhận & lên đơn)
     const shipping_fee = subtotal - discount >= 200000 ? 0 : 30000;
     const total = subtotal - discount + shipping_fee;
 
-    // Lưu đơn vào DB — status mặc định là "pending"
+    // Gắn user_id nếu đang đăng nhập
+    const user_id = req.user?.id || null;
+
     const { orderId, orderCode } = await Order.create(
       {
-        user_id: req.user?.id || null,
+        user_id,
         full_name, phone, email,
         address, ward, district, province,
         ward_code, district_id, note,
@@ -84,7 +83,6 @@ exports.create = async (req, res, next) => {
 
     const order = await Order.findById(orderId);
 
-    // Gửi email thông báo admin có đơn mới cần xác nhận
     sendAdminNewOrder(order).catch(e =>
       console.error("[email] sendAdminNewOrder:", e.message)
     );
@@ -106,7 +104,6 @@ exports.track = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "Không tìm thấy đơn hàng." });
     }
 
-    // Lấy trạng thái realtime từ GHN nếu đã có mã vận đơn
     let ghnStatus = null;
     if (order.ghn_order_code) {
       try {
@@ -122,21 +119,39 @@ exports.track = async (req, res, next) => {
 };
 
 // ── ĐƠN HÀNG CỦA TÔI ─────────────────────────────────────
+// Tìm theo user_id HOẶC phone/email để cover cả đơn đặt lúc chưa đăng nhập
 exports.getMyOrders = async (req, res, next) => {
   try {
     const { page = 1, limit = 10, status } = req.query;
     const offset = (Number(page) - 1) * Number(limit);
+    const user = req.user;
 
-    let where = "WHERE user_id = ?";
-    const params = [req.user.id];
-    if (status) { where += " AND status = ?"; params.push(status); }
+    // Build WHERE: user_id khớp HOẶC phone khớp HOẶC email khớp
+    let where = "WHERE (user_id = ?";
+    const params = [user.id];
+
+    if (user.phone) {
+      where += " OR phone = ?";
+      params.push(user.phone);
+    }
+    if (user.email) {
+      where += " OR email = ?";
+      params.push(user.email);
+    }
+    where += ")";
+
+    if (status) {
+      where += " AND status = ?";
+      params.push(status);
+    }
 
     const [rows] = await db.query(
       `SELECT * FROM orders ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       [...params, Number(limit), offset]
     );
     const [[{ total }]] = await db.query(
-      `SELECT COUNT(*) AS total FROM orders ${where}`, params
+      `SELECT COUNT(*) AS total FROM orders ${where}`,
+      params
     );
 
     res.json({ success: true, orders: rows, total });
